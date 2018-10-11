@@ -10,8 +10,6 @@
 #define DISPLAY_MX_TIME 5   // multiplexing rate for display, in millis
 #define CLOCK_SERIAL_RX 2
 #define CLOCK_SERIAL_TX 3
-#define NOTE_SERIAL_RX  4
-#define NOTE_SERIAL_TX  5
 
 #define DEFAULT_CHANNEL 1
 
@@ -36,7 +34,6 @@ byte current_note_index = 0;
 bool led_on = false;
 bool running = false;
 SoftwareSerial swSerial1(CLOCK_SERIAL_RX, CLOCK_SERIAL_TX);
-SoftwareSerial swSerial2(NOTE_SERIAL_RX, NOTE_SERIAL_TX);
 MIDI_CREATE_INSTANCE(SoftwareSerial, swSerial1, ClockMIDI);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial, NoteMIDI);
 byte notes[NOTE_ARRAY_SIZE];
