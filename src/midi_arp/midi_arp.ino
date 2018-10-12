@@ -17,7 +17,7 @@
 #define INVALID_NOTE    255 // used as an indicator that no note is in the current position
                             // since valid midi notes range from 0-127, any value > 127 can work
 
-byte display_cc[3] = {DISPLAY_CC_1, DISPLAY_CC_2, DISPLAY_CC_3}; 
+byte display_cc[3] = {DISPLAY_CC_1, DISPLAY_CC_2, DISPLAY_CC_3};
 char display_chars[4];
 byte display_current = 0;
 unsigned long display_next_time = 0;
@@ -59,7 +59,7 @@ void setup() {
   }
 
   strncpy(display_chars, "OFF", 3);
-  
+
   // enable midi
   ClockMIDI.begin(MIDI_CHANNEL_OMNI);
   NoteMIDI.begin(DEFAULT_CHANNEL);
@@ -82,7 +82,7 @@ void setup() {
 void loop() {
   while (NoteMIDI.read())
   {
-    switch(NoteMIDI.getType())
+    switch (NoteMIDI.getType())
     {
       case midi::NoteOff:
         handleNoteOff(NoteMIDI.getChannel(), NoteMIDI.getData1(), NoteMIDI.getData2());
@@ -97,7 +97,7 @@ void loop() {
   }
   ClockMIDI.read();
   digitalWrite(TEMPO_LED, led_on);
-  
+
   if (millis() > display_next_time)
     doDisplay();
 }
@@ -220,21 +220,21 @@ void removeNote(byte note, byte velocity)
 
 void isort(byte *a, int n)
 {
- for (int i = 1; i < n; ++i)
- {
-   int j = a[i];
-   int k;
-   for (k = i - 1; (k >= 0) && (j < a[k]); k--)
-   {
-     a[k + 1] = a[k];
-   }
-   a[k + 1] = j;
- }
+  for (int i = 1; i < n; ++i)
+  {
+    int j = a[i];
+    int k;
+    for (k = i - 1; (k >= 0) && (j < a[k]); k--)
+    {
+      a[k + 1] = a[k];
+    }
+    a[k + 1] = j;
+  }
 }
 
 void sortNotes()
 {
- isort(notes, NOTE_ARRAY_SIZE);
+  isort(notes, NOTE_ARRAY_SIZE);
 }
 
 void doDisplay()
