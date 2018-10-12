@@ -22,7 +22,17 @@ char display_chars[4];
 byte display_current = 0;
 unsigned long display_next_time = 0;
 
-char characters[128]; // array to hold character values
+const PROGMEM char characters[] = {
+  // 7-segment characters for 7-byte ASCII
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x24, 0x60, 0x7B, 0xDA, 0x48, 0x38, 0x20, 0xC3, 0xAA, 0xC0, 0x51, 0x01, 0x10, 0x04, 0x31,
+  0xEB, 0x28, 0xB3, 0xBA, 0x78, 0xDA, 0xDB, 0xA8, 0xFB, 0xFA, 0x90, 0x0C, 0x03, 0x12, 0xA0, 0xB4,
+  0xBB, 0xF9, 0x5B, 0x13, 0x3B, 0xD3, 0xD1, 0xCB, 0x59, 0x08, 0x2A, 0x79, 0x43, 0x89, 0x19, 0x1B,
+  0xF1, 0xF8, 0x11, 0xDA, 0x53, 0x6B, 0x0B, 0x72, 0x7D, 0x7A, 0xB3, 0xC3, 0x60, 0xAA, 0x80, 0x02,
+  0x40, 0xF9, 0x5B, 0x13, 0x3B, 0xD3, 0xD1, 0xCB, 0x59, 0x08, 0x2A, 0x79, 0x43, 0x89, 0x19, 0x1B,
+  0xF1, 0xF8, 0x11, 0xDA, 0x53, 0x6B, 0x0B, 0x72, 0x7D, 0x7A, 0xB3, 0xC3, 0x41, 0xAA, 0xE0, 0x00
+};
 
 byte current_tick = 0;
 byte notes_on = 0;
@@ -47,7 +57,7 @@ void setup() {
   {
     pinMode(display_cc[i], OUTPUT);
   }
-  initCharacters();
+
   strncpy(display_chars, "OFF", 3);
   
   // enable midi
@@ -96,7 +106,7 @@ void handleStart()
 {
   running = true;
   // kill all notes at start
-  NoteMIDI.sendControlChange(123,0, DEFAULT_CHANNEL);
+  NoteMIDI.sendControlChange(123, 0, DEFAULT_CHANNEL);
   // send start
   NoteMIDI.sendRealTime(midi::Start);
   current_tick = 0;
@@ -107,7 +117,7 @@ void handleStop()
 {
   running = false;
   // kill all notes at end
-  NoteMIDI.sendControlChange(123,0, DEFAULT_CHANNEL);
+  NoteMIDI.sendControlChange(123, 0, DEFAULT_CHANNEL);
   // send stop
   NoteMIDI.sendRealTime(midi::Stop);
   last_note = INVALID_NOTE;
@@ -233,82 +243,10 @@ void doDisplay()
   {
     digitalWrite(display_cc[i], HIGH);
   }
-  shiftOut(DISPLAY_DATA, DISPLAY_CLOCK, MSBFIRST, characters[display_chars[display_current]]);
+  shiftOut(DISPLAY_DATA, DISPLAY_CLOCK, MSBFIRST, pgm_read_byte_near(characters + display_chars[display_current]));
   digitalWrite(display_cc[display_current], LOW);
   display_current++;
   display_current %= 3;
   display_next_time = millis() + DISPLAY_MX_TIME;
-}
-
-// TODO: move this into progmem somehow
-void initCharacters()
-{
-  characters['0'] = 0xEB;
-  characters['1'] = 0x28;
-  characters['2'] = 0xB3;
-  characters['3'] = 0xBA;
-  characters['4'] = 0x78;
-  characters['5'] = 0xDA;
-  characters['6'] = 0xDB;
-  characters['7'] = 0xA8;
-  characters['8'] = 0xFB;
-  characters['9'] = 0xFA;
-  characters['A'] = 0xF9;
-  characters['B'] = 0x5B;
-  characters['C'] = 0x13;
-  characters['D'] = 0x3B;
-  characters['E'] = 0xD3;
-  characters['F'] = 0xD1;
-  characters['G'] = 0xCB;
-  characters['H'] = 0x59;
-  characters['I'] = 0x08;
-  characters['J'] = 0x2A;
-  characters['K'] = 0x79;
-  characters['L'] = 0x43;
-  characters['M'] = 0x89;
-  characters['N'] = 0x19;
-  characters['O'] = 0x1B;
-  characters['P'] = 0xF1;
-  characters['Q'] = 0xF8;
-  characters['R'] = 0x11;
-  characters['S'] = 0xDA;
-  characters['T'] = 0x53;
-  characters['U'] = 0x6B;
-  characters['V'] = 0x0B;
-  characters['W'] = 0x72;
-  characters['X'] = 0x7D;
-  characters['Y'] = 0x7A;
-  characters['Z'] = 0xB3;
-  characters['-'] = 0x10;
-  characters['\''] = 0x20;
-  characters[','] = 0x01;
-  characters['.'] = 0x04;
-  characters['\"'] = 0x60;
-  characters['='] = 0x12;
-  characters['('] = 0xC3;
-  characters[')'] = 0xAA;
-  characters['['] = 0xC3;
-  characters[']'] = 0xAA;
-  characters['{'] = 0xC3;
-  characters['}'] = 0xAA;
-  characters['|'] = 0x41;
-  characters['_'] = 0x02;
-  characters['<'] = 0x03;
-  characters['>'] = 0xA0;
-  characters[':'] = 0x90;
-  characters['^'] = 0x80;
-  characters['@'] = 0xBB;
-  characters['`'] = 0x40;
-  characters['!'] = 0x24;
-  characters[';'] = 0x0C;
-  characters['\\'] = 0x58;
-  characters['/'] - 0x31;   // this one doesn't want to work
-  characters['$'] = 0xDA;   // just an S
-  characters['#'] = 0x7B;
-  characters['+'] = 0x51;
-  characters['&'] = 0x38;
-  characters['*'] = 0xC0;
-  characters['?'] = 0xB4;
-  characters['%'] = 0x48;
 }
 
