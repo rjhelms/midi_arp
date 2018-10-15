@@ -1,5 +1,6 @@
 #include <MIDI.h>
 #include <SoftwareSerial.h>
+#include <Encoder.h>
 
 #define TEMPO_LED       13
 #define DISPLAY_DATA    14  // both data lines of 74164 tied together
@@ -7,9 +8,15 @@
 #define DISPLAY_CC_1    17  // cathode pin for digit 1
 #define DISPLAY_CC_2    18  // cathode pin for digit 2
 #define DISPLAY_CC_3    19  // cathode pin for digit 3
-#define DISPLAY_MX_TIME 5   // multiplexing rate for display, in millis
-#define CLOCK_SERIAL_RX 2
-#define CLOCK_SERIAL_TX 3
+#define DISPLAY_MX_TIME 2   // multiplexing rate for display, in millis
+#define ENCODER_A       2
+#define ENCODER_B       3
+#define SW_ENTER        6
+#define SW_BACK         7
+#define DEBOUNCE_TIME   10
+
+#define CLOCK_SERIAL_RX 4
+#define CLOCK_SERIAL_TX 5
 
 #define DEFAULT_CHANNEL 1
 
@@ -34,19 +41,41 @@ const PROGMEM char characters[] = {
   0xF1, 0xF8, 0x11, 0xDA, 0x53, 0x6B, 0x0B, 0x72, 0x7D, 0x7A, 0xB3, 0xC3, 0x41, 0xAA, 0xE0, 0x00
 };
 
-byte current_tick = 0;
-byte notes_on = 0;
+const char division_text[17][4] = {
+  " 1D", " 1 ", " 2D", " 1T", " 2 ", " 4D", " 2T", " 4 ",
+  " 8D", " 4T", " 8 ", "16D", " 8T", "16 ","16T", "32 ",
+  "32T"
+};
+const byte division_ticks[] = {
+  144, 96, 72, 64, 48, 36, 32, 24,
+  18, 16, 12, 9, 8, 6, 4, 3,
+  2
+};
 
+int division_current = 7;
+int division_display = 7;
+byte sync_tick = 0;
+byte arp_tick = 0;
+byte notes_on = 0;
 
 byte last_note = INVALID_NOTE;
 byte current_note_index = 0;
 
 bool led_on = false;
 bool running = false;
+
+bool enter_state;
+unsigned long enter_debounce_time = 0;
+bool back_state;
+unsigned long back_debounce_time = 0;
+
 SoftwareSerial swSerial1(CLOCK_SERIAL_RX, CLOCK_SERIAL_TX);
 MIDI_CREATE_INSTANCE(SoftwareSerial, swSerial1, ClockMIDI);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial, NoteMIDI);
 byte notes[NOTE_ARRAY_SIZE];
+
+Encoder encoder(ENCODER_A, ENCODER_B);
+int encoder_position = 0;
 
 void setup() {
   // configure display
@@ -58,7 +87,11 @@ void setup() {
     pinMode(display_cc[i], OUTPUT);
   }
 
-  strncpy(display_chars, "OFF", 3);
+  // configure buttons
+  pinMode(SW_ENTER, INPUT_PULLUP);
+  pinMode(SW_BACK, INPUT_PULLUP);
+  enter_state = digitalRead(SW_ENTER);
+  back_state = digitalRead(SW_BACK);
 
   // enable midi
   ClockMIDI.begin(MIDI_CHANNEL_OMNI);
@@ -97,9 +130,61 @@ void loop() {
   }
   ClockMIDI.read();
   digitalWrite(TEMPO_LED, led_on);
-
+  handleEncoder();
+  handleButtons();
+  strncpy(display_chars, division_text[division_display], 3);
   if (millis() > display_next_time)
     doDisplay();
+}
+
+void handleEncoder()
+{
+  encoder_position = encoder.read();
+  if (encoder_position > 3)
+  {
+    processEncoder(1);
+  } else if (encoder_position < -3) {
+    processEncoder(-1);
+  }
+}
+
+void handleButtons()
+{
+  bool new_enter_state = digitalRead(SW_ENTER);
+  if (new_enter_state != enter_state)
+  {
+    if (enter_debounce_time == 0)
+    {
+      enter_debounce_time = millis();
+      enter_state = new_enter_state;
+      if (enter_state == LOW)
+      {
+        processEnter();
+      }
+    }
+  }
+  if (millis() - DEBOUNCE_TIME >= enter_debounce_time)
+  {
+    enter_debounce_time = 0;
+  }
+  
+  bool new_back_state = digitalRead(SW_BACK);
+  if (new_back_state != back_state)
+  {
+    if (back_debounce_time == 0)
+    {
+      back_debounce_time = millis();
+      back_state = new_back_state;
+      if (back_state == LOW)
+      {
+        processBack();
+      }
+    }
+  }
+  if (millis() - DEBOUNCE_TIME >= back_debounce_time)
+  {
+    back_debounce_time = 0;
+  }
 }
 
 void handleStart()
@@ -109,8 +194,8 @@ void handleStart()
   NoteMIDI.sendControlChange(123, 0, DEFAULT_CHANNEL);
   // send start
   NoteMIDI.sendRealTime(midi::Start);
-  current_tick = 0;
-  strncpy(display_chars, "ON ", 3);
+  sync_tick = 0;
+  arp_tick = 0;
 }
 
 void handleStop()
@@ -122,22 +207,37 @@ void handleStop()
   NoteMIDI.sendRealTime(midi::Stop);
   last_note = INVALID_NOTE;
   current_note_index = 0;
-  current_tick = 0;
+  sync_tick = 0;
+  arp_tick = 0;
   led_on = false;
-  strncpy(display_chars, "OFF", 3);
 }
 
 void handleClock()
 {
   // send clock
   NoteMIDI.sendRealTime(midi::Clock);
+  // TODO: more meaningful start/stop
   // process clock
   if (running)
   {
-    if (current_tick == 0)
+    // TODO: actual syncing
+    if (sync_tick == 0)
     {
       led_on = true;
-      // TODO: configurable clocking & gating - this is quarter notes, 50% gating
+    }
+    else if (sync_tick == 5)
+    {
+      led_on = false;
+    }
+
+    if (arp_tick == 0)
+    {
+      // TODO: configurable gating - for now, 100%
+      if (last_note != INVALID_NOTE)
+      {
+        NoteMIDI.sendNoteOff(last_note, 127, DEFAULT_CHANNEL);
+        last_note = INVALID_NOTE;
+      }
       // if we've got notes held down...
       if (notes_on > 0)
       {
@@ -152,21 +252,10 @@ void handleClock()
         current_note_index = 0;
       }
     }
-    else if (current_tick == 5)
-    {
-      led_on = false;
-    }
-    else if (current_tick == 12)
-    {
-      // if a valid note is playing
-      if (last_note != INVALID_NOTE)
-      {
-        NoteMIDI.sendNoteOff(last_note, 127, DEFAULT_CHANNEL);
-        last_note = INVALID_NOTE;
-      }
-    }
-    current_tick++;
-    current_tick = current_tick % 24;
+    sync_tick++;
+    sync_tick %= 24;
+    arp_tick++;
+    arp_tick %= division_ticks[division_current];
   }
 }
 
@@ -237,8 +326,11 @@ void sortNotes()
   isort(notes, NOTE_ARRAY_SIZE);
 }
 
+// TODO: navigation and display modes
+
 void doDisplay()
 {
+  // TODO: fix display jitter
   for (int i = 0; i < 3; i++)
   {
     digitalWrite(display_cc[i], HIGH);
@@ -248,5 +340,25 @@ void doDisplay()
   display_current++;
   display_current %= 3;
   display_next_time = millis() + DISPLAY_MX_TIME;
+}
+
+void processEncoder(int movement)
+{
+  division_display += movement;
+  if (division_display < 0)
+    division_display = 0;
+  if (division_display >= sizeof(division_ticks))
+    division_display = sizeof(division_ticks) - 1;
+  encoder.write(0);
+}
+
+void processEnter()
+{
+  division_current = division_display;
+}
+
+void processBack()
+{
+  division_display = division_current;
 }
 
