@@ -133,7 +133,7 @@ void loop() {
   handleEncoder();
   handleButtons();
   strncpy(display_chars, division_text[division_display], 3);
-  if (millis() > display_next_time)
+  if (millis() >= display_next_time)
     doDisplay();
 }
 
@@ -331,15 +331,12 @@ void sortNotes()
 void doDisplay()
 {
   // TODO: fix display jitter
-  for (int i = 0; i < 3; i++)
-  {
-    digitalWrite(display_cc[i], HIGH);
-  }
-  shiftOut(DISPLAY_DATA, DISPLAY_CLOCK, MSBFIRST, pgm_read_byte_near(characters + display_chars[display_current]));
-  digitalWrite(display_cc[display_current], LOW);
+  digitalWrite(display_cc[display_current], HIGH);
   display_current++;
   display_current %= 3;
-  display_next_time = millis() + DISPLAY_MX_TIME;
+  shiftOut(DISPLAY_DATA, DISPLAY_CLOCK, MSBFIRST, pgm_read_byte_near(characters + display_chars[display_current]));
+  digitalWrite(display_cc[display_current], LOW);
+  display_next_time += DISPLAY_MX_TIME;
 }
 
 void processEncoder(int movement)
